@@ -1,27 +1,30 @@
 const InvoiceModel = require('../models/invoice')
-const Receiver = require('../lib/receiver')
+//const Receiver = require('../lib/receiver')
+const { v4 } = require('uuid');
+
+const http = require('superagent');
 
 class PaymentPointerController {
   constructor (deps) {
     this.invoices = deps(InvoiceModel)
-    this.receiver = deps(Receiver)
+    //this.receiver = deps(Receiver)
   }
 
   async init (router) {
-    await this.receiver.listen()
+    //await this.receiver.listen()
 
     router.get('/:invoice_id', async ctx => {
       if (ctx.get('Accept').indexOf('application/spsp+json') === -1) {
         return ctx.throw(404)
       }
 
-      const invoice = await this.invoices.get(ctx.params.invoice_id)
+      const invoice = await http.get(`https://api.anypay.global/invoices/${ctx.params.invoice_id}`);
+
       if (!invoice) {
         return ctx.throw(404, 'Invoice not found')
       }
 
-      const { destinationAccount, sharedSecret } =
-        this.receiver.generateAddressAndSecret()
+      const sharedSecret = v1();
 
       const segments = destinationAccount.split('.')
       const resultAccount = segments.slice(0, -2).join('.') +
@@ -30,10 +33,10 @@ class PaymentPointerController {
 
       ctx.set('Content-Type', 'application/spsp+json')
       ctx.body = {
-        destination_account: resultAccount,
+        destination_account: invoice.address,
         shared_secret: sharedSecret,
         balance: {
-          current: String(invoice.balance),
+          current: invoice.status === 'unpaid' ? '0' : String(invoice.amount_paid),
           maximum: String(invoice.amount)
         },
         receiver_info: {
